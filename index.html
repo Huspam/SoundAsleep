@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sleep Movement Tracker</title>
+    <link href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        :root {
+            font-size: 16px; /* Default font size for rem units */
+        }
+        body {
+            padding-top: 2.5rem;
+            background-color: #121212;
+            color: #e0e0e0;
+        }
+        .container {
+            max-width: 100%;
+            margin-bottom: 2.5rem;
+        }
+        .split {
+            display: flex;
+            height: calc(100vh - 18.75rem); /* Adjust the height as needed */
+        }
+        .left,
+        .right {
+            padding: 1.25rem;
+            box-sizing: border-box;
+        }
+        .left {
+            margin-left: 1.25rem;
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+        }
+        .right {
+            margin-right: 1.25rem;
+            background: #1e1e1e;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+        .gutter {
+            background-color: #333;
+            background-repeat: no-repeat;
+            background-position: 50%;
+            cursor: col-resize;
+        }
+        .gutter.gutter-horizontal {
+            height: 100%;
+            width: 0.625rem;
+        }
+        .list-group-item {
+            margin-bottom: 0.625rem;
+            background-color: #2e2e2e;
+            border: none;
+            color: #000; /* Set text color to black */
+        }
+        .low-count {
+            background-color: #a8e6a1; /* Lighter pastel green */
+            color: #000; /* Set text color to black */
+        }
+        .medium-count {
+            background-color: #ffecb3; /* Lighter pastel yellow */
+            color: #000; /* Set text color to black */
+        }
+        .high-count {
+            background-color: #ffcccb; /* Lighter pastel red */
+            color: #000; /* Set text color to black */
+        }
+        .card-title {
+            margin-bottom: 2.5rem;
+        }
+        .btn-primary {
+            background-color: #1e88e5;
+            border-color: #1e88e5;
+        }
+        .btn-danger {
+            background-color: #e53935;
+            border-color: #e53935;
+        }
+        .btn {
+            margin: 0.3125rem;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            height: calc(100% - 2.5rem); /* Ensure it takes the full height of its container */
+        }
+        canvas {
+            display: block;
+            width: 100% !important;
+            height: 100% !important;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-5">Sleep Movement Tracker</h1>
+        <div class="form-inline justify-content-center mb-5">
+            <form method="post" action="/" class="form-inline justify-content-center">
+                <div class="form-group mx-sm-3 mb-2">
+                    <label for="movement" class="sr-only">Movement</label>
+                    <input type="number" class="form-control" id="movement" name="movement" placeholder="Enter movement" required>
+                </div>
+                <button type="submit" class="btn btn-primary mb-2">Submit</button>
+            </form>
+            <form method="post" action="/" class="ml-2">
+                <input type="hidden" name="reset" value="reset">
+                <button type="submit" class="btn btn-danger mb-2">Reset</button>
+            </form>
+        </div>
+        {% if movement_history %}
+        <div class="split" id="split-view">
+            <div class="left">
+                <h5 class="card-title">Movement History</h5>
+                <ul class="list-group">
+                    {% for entry in movement_history %}
+                    <li class="list-group-item {% if entry.movement <= 33 %}low-count{% elif entry.movement <= 66 %}medium-count{% else %}high-count{% endif %}">
+                        <strong>Movement:</strong> {{ entry.movement }}<br>
+                        <strong>Timestamp:</strong> {{ entry.timestamp }}
+                    </li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="right">
+                <h5 class="card-title">Movement Over Time</h5>
+                <div class="chart-container">
+                    <canvas id="movementChart"></canvas>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+    <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.9.3/dist/umd/popper.min.js"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/split.js/1.6.0/split.min.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            {% if movement_history %}
+            Split(['.left', '.right'], {
+                sizes: [30, 70],
+                minSize: 200,
+                gutterSize: 10,
+                cursor: 'col-resize',
+                gutter: function (index, direction) {
+                    var gutter = document.createElement('div');
+                    gutter.className = 'gutter gutter-' + direction;
+                    return gutter;
+                },
+                onDrag: function() {
+                    var chart = Chart.getChart("movementChart");
+                    if (chart) {
+                        chart.resize();
+                    }
+                }
+            });
+
+            var ctx = document.getElementById('movementChart').getContext('2d');
+            var movementHistory = {{ movement_history|tojson }};
+            var movements = movementHistory.map(function(entry) {
+                return entry.movement;
+            });
+            var timestamps = movementHistory.map(function(entry) {
+                return entry.timestamp;
+            });
+
+            var chart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: timestamps,
+                    datasets: [{
+                        label: 'Movement',
+                        data: movements,
+                        borderColor: 'rgba(75, 192, 192, 1)',
+                        backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'minute'
+                            },
+                            ticks: {
+                                color: '#e0e0e0' // X-axis ticks color
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            ticks: {
+                                color: '#e0e0e0' // Y-axis ticks color
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            labels: {
+                                color: '#e0e0e0' // Legend color
+                            }
+                        }
+                    }
+                }
+            });
+            {% endif %}
+        });
+    </script>
+</body>
+</html>

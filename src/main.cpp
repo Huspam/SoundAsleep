@@ -6,11 +6,14 @@
 #include <inttypes.h>
 #include <stdio.h>
 #include "SparkFunLSM6DSO.h"
+#include <iostream>
+#include <cmath>
+
+using namespace std;
 
 // Accelerometer vars
 LSM6DSO myIMU;
 const float threshold = 0.3;
-int move_count = 0;
 bool forward = false;
 float X;
 float Y;
@@ -21,9 +24,13 @@ char ssid[50] = "HusamPhone"; // your network SSID (name)
 char pass[50] = "iHusam0103"; // your network password (use for WPA, or use as key for WEP)
 const int kNetworkTimeout = 30 * 1000; // Number of milliseconds to wait without receiving any data before we give up
 const int kNetworkDelay = 1000; // Number of milliseconds to wait if no data is available before trying again
+double move_degree = 0;
+int move_int = 0;
+double large_movement = 0;
 
 void Wifi_Scan();
 void Wifi_Connect();
+double distance_3d(double x1, double y1, double z1, double x2, double y2, double z2);
 
 void setup() {
   Serial.begin(9600);
@@ -47,18 +54,25 @@ void loop() {
   float nX = myIMU.readFloatAccelX();
   float nY = myIMU.readFloatAccelY();
   float nZ = myIMU.readFloatAccelZ();
-  Serial.println(move_count);
 
   // check movement
-  if ((X != nX && abs(X-nX)>threshold) || (Y != nY && abs(Y-nY)>threshold) || (Z != nZ && abs(Z-nZ)>threshold)) {
-    move_count++;
+  move_degree = distance_3d(X, Y, Z, nX, nY, nZ);
+  Serial.println(move_degree);
+  if (move_degree > threshold) {
+    Serial.println(move_degree);
+    if (move_degree > 2){
+      move_degree = 2;
+    }
+    move_int = int((move_degree/2) * 100);
+    Serial.println(move_int);
 
     int err = 0;
     WiFiClient c;
     HttpClient http(c);
 
-    String query = "/?move_count=" + String(move_count);
-    err = http.get("52.53.210.123", 5000, query.c_str(), NULL);
+    String query = "/?movement=" + String(move_int);
+    err = http.get("13.52.74.129", 5000, query.c_str(), NULL);
+    
     if (err == 0) {
       Serial.println("startedRequest ok");
       err = http.responseStatusCode();
@@ -115,7 +129,7 @@ void loop() {
   // update new coordinates
   X = nX; Y = nY; Z = nZ;
 
-  delay(7500);
+  delay(2000);
 }
 
 
@@ -161,4 +175,8 @@ void Wifi_Connect() {
   Serial.println("MAC address: ");
   Serial.println(WiFi.macAddress());
 
+}
+
+double distance_3d(double x1, double y1, double z1, double x2, double y2, double z2) {
+    return sqrt(pow(x2 - x1, 2) + pow(y2 - y1, 2) + pow(z2 - z1, 2));
 }
